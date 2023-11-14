@@ -226,6 +226,8 @@ WebFileSystem::DataProtocol WebFileSystem::inferDataProtocol(std::string_view ur
         proto = WebFileSystem::DataProtocol::HTTP;
     } else if (hasPrefix(url, "s3://")) {
         proto = WebFileSystem::DataProtocol::S3;
+    } else if (hasPrefix(url, "opfs://")) {
+        proto = WebFileSystem::DataProtocol::BROWSER_FSACCESS;
     } else if (hasPrefix(url, "file://")) {
         data_url = std::string_view{url}.substr(7);
         proto = default_data_protocol_;
@@ -594,6 +596,7 @@ duckdb::unique_ptr<duckdb::FileHandle> WebFileSystem::OpenFile(const string &url
     std::shared_ptr<WebFile> file = nullptr;
     auto iter = files_by_name_.find(url);
     if (iter == files_by_name_.end()) {
+        if (flags.ReturnNullIfNotExists()) return nullptr;
         // Determine url type
         DataProtocol data_proto = inferDataProtocol(url);
 
@@ -778,7 +781,7 @@ void WebFileSystem::Write(duckdb::FileHandle &handle, void *buffer, int64_t nr_b
     auto file_size = file_hdl.file_->file_size_;
     auto writer = static_cast<char *>(buffer);
     file_hdl.position_ = location;
-    while (nr_bytes > 0 && location < file_size) {
+    while (nr_bytes > 0) {
         auto n = Write(handle, writer, nr_bytes);
         writer += n;
         nr_bytes -= n;

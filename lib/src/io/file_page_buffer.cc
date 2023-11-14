@@ -283,6 +283,9 @@ std::unique_ptr<FilePageBuffer::FileRef> FilePageBuffer::OpenFile(std::string_vi
     auto file_ptr = std::make_unique<BufferedFile>(file_id, path, flags);
     auto& file = *file_ptr;
     file.handle = filesystem->OpenFile(file.path.c_str(), flags);
+    if (file.handle == nullptr && flags.ReturnNullIfNotExists()) {
+        return nullptr;
+    }
     assert(file.handle != nullptr);
     files_by_name.insert({file.path, file_ptr.get()});
     files.insert({file_id, std::move(file_ptr)});

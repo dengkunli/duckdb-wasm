@@ -87,6 +87,11 @@ export interface DuckDBGlobalFileInfo {
     s3Config?: S3Config;
 }
 
+export interface PreparedDBFileHandle {
+    path: string;
+    handle: any;
+}
+
 /** Call a function with packed response buffer */
 export function callSRet(
     mod: DuckDBModule,
@@ -146,6 +151,8 @@ export interface DuckDBRuntime {
     moveFile(mod: DuckDBModule, fromPtr: number, fromLen: number, toPtr: number, toLen: number): void;
     checkFile(mod: DuckDBModule, pathPtr: number, pathLen: number): boolean;
     removeFile(mod: DuckDBModule, pathPtr: number, pathLen: number): void;
+
+    prepareDBFileHandle?: (path: string, protocol: DuckDBDataProtocol) => Promise<PreparedDBFileHandle[]>;
 
     // Call a scalar UDF function
     callScalarUDF(

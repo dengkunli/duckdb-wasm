@@ -444,13 +444,27 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         }
         dropResponseBuffers(this.mod);
     }
+    /** Prepare a file handle that could only be acquired aschronously */
+    public async prepareDBFileHandle(path: string, protocol: DuckDBDataProtocol): Promise<void> {
+        if (protocol === DuckDBDataProtocol.BROWSER_FSACCESS && this._runtime.prepareDBFileHandle) {
+            const list = await this._runtime.prepareDBFileHandle(path, DuckDBDataProtocol.BROWSER_FSACCESS);
+            for (const item of list) {
+                const { handle, path: filePath } = item;
+                if (!this._runtime._files?.has(filePath) && handle.getSize()) {
+                    await this.registerFileHandle(filePath, handle, DuckDBDataProtocol.BROWSER_FSACCESS, true);
+                }
+            }
+            return;
+        }
+        throw new Error(`prepareDBFileHandle: unsupported protocol ${protocol}`);
+    }
     /** Register a file object URL */
-    public registerFileHandle<HandleType>(
+    public async registerFileHandle<HandleType>(
         name: string,
         handle: HandleType,
         protocol: DuckDBDataProtocol,
         directIO: boolean,
-    ): void {
+    ): Promise<void> {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_fs_register_file_url',
@@ -461,7 +475,16 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
             throw new Error(readString(this.mod, d, n));
         }
         dropResponseBuffers(this.mod);
-        globalThis.DUCKDB_RUNTIME._files = (globalThis.DUCKDB_RUNTIME._files || new Map()).set(name, handle);
+        // const preparedHandle = globalThis.DUCKDB_RUNTIME._preparedHandles?.[name]; // sync handle
+        let _handle: any = handle;
+        if (protocol === DuckDBDataProtocol.BROWSER_FSACCESS && handle instanceof FileSystemFileHandle) {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            _handle = await handle.createSyncAccessHandle({
+                mode: 'readwrite-unsafe',
+            });
+        }
+        globalThis.DUCKDB_RUNTIME._files = (globalThis.DUCKDB_RUNTIME._files || new Map()).set(name, _handle || handle);
         if (this.pthread) {
             for (const worker of this.pthread.runningWorkers) {
                 worker.postMessage({
